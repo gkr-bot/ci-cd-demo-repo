@@ -1,40 +1,34 @@
-name: Benchmark Hub PR
+name: Benchmark Hub
 on:
-  workflow_run:
-    workflows: ["Lint"]
-    types: [completed]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
 
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   ACTIVELOOP_HUB_PASSWORD: ${{ secrets.ACTIVELOOP_HUB_PASSWORD }}
   REPOSITORY_PAT: ${{ secrets.ACTIVELOOP_BOT_PAT }}
-  BASELINE_REF: pr-${{ github.event.workflow_run.pull_requests[0].number }}-baseline-${{ github.event.workflow_run.pull_requests[0].base.ref }}
-  COMMIT_REF: pr-${{ github.event.workflow_run.pull_requests[0].number }}-commit-${{ github.workflow_run.pull_requests[0].head.sha }}
-  PARENT_URL: ${{ github.event.html_url }}
+  BASELINE_REF: pr-${{ github.event.number }}-baseline-${{ github.event.pull_request.base.ref }}
+  COMMIT_REF: pr-${{ github.event.number }}-commit-${{ github.event.pull_request.head.sha }}
 jobs:
-  benchmark-pull-requests:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' && github.repository == 'activeloopai/ci-cd-demo-repo' }}
+  benchmark:
     runs-on: [looprunner]
     steps:
-      - name: Prints the trigger name
-        run: echo Parent ${PARENT_URL}
       - name: Creates initial issue comment
         uses: actions/github-script@v3
         with:
-          github-token: ${{ secrets.ACTIVELOOP_BOT_PAT }}
+          github-token: ${{ secrets.REPOSITORY_PAT }}
           script: |
             const workflowRunUrl =
               process.env.GITHUB_SERVER_URL +
               '/' +
               process.env.GITHUB_REPOSITORY +
-              '/actions/runs/${{ github.run_id }}?check_suite_focus=true';
+              '/actions/runs/${{ github.run_id }}';
              // Get the existing comments.
             const {data: comments} = await github.issues.listComments({
               owner: 'activeloopai',
               repo: 'ci-cd-demo-repo',
-              repo: context.repo.repo,
-              issue_number: context.payload.workflow_run.pull_requests[0].number,
+              issue_number: context.issue.number,
             });
             const commentFromBot = comments.find(
               (item) => item.user.login === 'activeloop-bot'
@@ -45,7 +39,7 @@ jobs:
                 workflowRunUrl;
               const commentId = commentFromBot.id;
               await github.issues.updateComment({
-                issue_number: context.payload.workflow_run.pull_requests[0].number,
+                issue_number: context.issue.number,
                 owner: 'activeloopai',
                 repo: 'ci-cd-demo-repo',
                 comment_id: commentId,
@@ -62,10 +56,10 @@ jobs:
                 body: prComment,
               });
             }
-
       - name: Cancel previous runs if available
         uses: styfle/cancel-workflow-action@0.9.1
         with:
+          all_but_latest: true
           access_token: ${{ github.token }}
       - name: Cleans the workspace
         run: rm -rdf baseline-source benchmark-source pr-source comment-temp
@@ -77,8 +71,8 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: baseline-source
-          repository: activeloopai/ci-cd-demo-repo
-          ref: ${{ github.event.workflow_run.pull_requests[0].base.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.base.ref }}
       - name: Checkout the Hub Benchmark source code
         uses: actions/checkout@v2
         with:
@@ -97,7 +91,7 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('hub/requirements/*.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-      
+
       - name: Sets up git username
         run: |
           git config --global user.name activeloop-bot
@@ -133,8 +127,9 @@ jobs:
           pip install csv2md
           mkdir comment-temp
           csv2md benchmark-source/results/improvements.csv > comment-temp/improvements.md
-          csv2md benchmark-source/results/regressions.csv > comment-temp/regressions.md 
+          csv2md benchmark-source/results/regressions.csv > comment-temp/regressions.md
       - uses: actions/github-script@v3
+        if: ${{ github.event_name == 'pull_request'}}
         name: Add benchmark results from file as a comment on pulll requests
         with:
           github-token: ${{ secrets.ACTIVELOOP_BOT_PAT }}
@@ -142,46 +137,15 @@ jobs:
             const commitRefEnv = process.env.COMMIT_REF;
             const fs = require('fs');
             const TOP_COUNT = 5; // Considering the top 5 only
-            const regressions = fs
-              .readFileSync('comment-temp/regressions.md', 'utf-8')
-              .split('\n')
-              .slice(0, TOP_COUNT + 2)
-              .filter((item) => item);
-            const improvements = fs
-              .readFileSync('comment-temp/improvements.md', 'utf-8')
-              .split('\n')
-              .slice(0, TOP_COUNT + 2)
-              .filter((item) => item);
-            let template =
-              '### Bencmark results 🚀 \n\n### Regressions\nTABLE_REGRESSION\n\n\n### Improvements\nTABLE_IMPROVEMENTS\n\n- [Full Improvenents List (Employees Only)](https://github.com/activeloopai/hub-benchmark-results/blob/' +
-              commitRefEnv +
-              '/improvements.csv)\n- [Full Regressions List (Employees Only)](https://github.com/activeloopai/hub-benchmark-results/blob/' +
-              commitRefEnv +
-              '/regressions.csv)\n';
-            const prComment = template
-              .replace(
-                'TABLE_REGRESSION',
-                regressions.length > 2 ? regressions.join('\n') : 'No Change'
-              )
-              .replace(
-                'TABLE_IMPROVEMENTS',
-                improvements.length > 2 ? improvements.join('\n') : 'No Change'
-              );
-            const {data: comments} = await github.issues.listComments({
-              owner: 'activeloopai',
-              repo: 'ci-cd-demo-repo',
-              repo: context.repo.repo,
-              issue_number: context.payload.workflow_run.pull_requests[0].number,
-            });
-
-            const commentFromBot = comments.find(
-              (item) => item.user.login === 'activeloop-bot'
-            );
-
-            await github.issues.updateComment({
-              issue_number: context.payload.workflow_run.pull_requests[0].number,
-              owner: 'activeloopai',
-              repo: 'ci-cd-demo-repo',
-              comment_id: commentFromBot.id,
-              body: prComment,
+            const regressions = fs.readFileSync("comment-temp/regressions.md", "utf-8").split("\n").slice(0, TOP_COUNT + 2).filter(item=>item);
+            console.dir(regressions);
+            const improvements = fs.readFileSync("comment-temp/improvements.md", "utf-8").split("\n").slice(0, TOP_COUNT + 2).filter(item=>item);
+            console.dir(improvements);
+            let template = "### Bencmark results 🚀 \n\n<details>\n<summary>Regressions</summary>\n\nTABLE_REGRESSION\n</details>\n\n<details>\n<summary>Improvements</summary>\n\nTABLE_IMPROVEMENTS\n</details>\n\n- [Full Improvenents List (Employees Only)](https://github.com/activeloopai/hub-benchmark-results/blob/" + commitRefEnv + "/improvements.csv)\n- [Full Regressions List (Employees Only)](https://github.com/activeloopai/hub-benchmark-results/blob/" + commitRefEnv + "/regressions.csv)\n";
+            const prComment = template.replace("TABLE_REGRESSION", regressions.length > 2 ? regressions.join("\n") : "No Change").replace("TABLE_IMPROVEMENTS", improvements.length > 2 ? improvements.join("\n") : "No Change");
+            github.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: prComment
             });
