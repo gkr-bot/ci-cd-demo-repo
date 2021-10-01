@@ -22,7 +22,7 @@ jobs:
       - name: Creates initial issue comment
         uses: actions/github-script@v3
         with:
-          github-token: ${{secrets.REPOSITORY_PAT}}
+          github-token: ${{ secrets.ACTIVELOOP_BOT_PAT }}
           script: |
             const workflowRunUrl =
               process.env.GITHUB_SERVER_URL +
@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: activeloopai/hub-benchmark
-          token: ${{ secrets.REPOSITORY_PAT }}
+          token: ${{ secrets.ACTIVELOOP_BOT_PAT }}
           path: benchmark-source
       - name: Set up Python 3.8
         uses: actions/setup-python@v2
@@ -137,7 +137,7 @@ jobs:
       - uses: actions/github-script@v3
         name: Add benchmark results from file as a comment on pulll requests
         with:
-          github-token: ${{secrets.REPOSITORY_PAT}}
+          github-token: ${{ secrets.ACTIVELOOP_BOT_PAT }}
           script: |
             const commitRefEnv = process.env.COMMIT_REF;
             const fs = require('fs');
