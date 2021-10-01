@@ -130,7 +130,6 @@ jobs:
           csv2md benchmark-source/results/improvements.csv > comment-temp/improvements.md
           csv2md benchmark-source/results/regressions.csv > comment-temp/regressions.md
       - uses: actions/github-script@v3
-        if: ${{ github.event_name == 'pull_request'}}
         name: Add benchmark results from file as a comment on pulll requests
         with:
           github-token: ${{ secrets.ACTIVELOOP_BOT_PAT }}
