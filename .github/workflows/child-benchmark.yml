@@ -52,7 +52,7 @@ jobs:
               await github.issues.createComment({
                 owner: 'activeloopai',
                 repo: 'ci-cd-demo-repo',
-                issue_number: context.payload.workflow_run.pull_requests[0].number,
+                issue_number: context.issue.number,
                 body: prComment,
               });
             }
@@ -137,15 +137,46 @@ jobs:
             const commitRefEnv = process.env.COMMIT_REF;
             const fs = require('fs');
             const TOP_COUNT = 5; // Considering the top 5 only
-            const regressions = fs.readFileSync("comment-temp/regressions.md", "utf-8").split("\n").slice(0, TOP_COUNT + 2).filter(item=>item);
-            console.dir(regressions);
-            const improvements = fs.readFileSync("comment-temp/improvements.md", "utf-8").split("\n").slice(0, TOP_COUNT + 2).filter(item=>item);
-            console.dir(improvements);
-            let template = "### Bencmark results 🚀 \n\n<details>\n<summary>Regressions</summary>\n\nTABLE_REGRESSION\n</details>\n\n<details>\n<summary>Improvements</summary>\n\nTABLE_IMPROVEMENTS\n</details>\n\n- [Full Improvenents List (Employees Only)](https://github.com/activeloopai/hub-benchmark-results/blob/" + commitRefEnv + "/improvements.csv)\n- [Full Regressions List (Employees Only)](https://github.com/activeloopai/hub-benchmark-results/blob/" + commitRefEnv + "/regressions.csv)\n";
-            const prComment = template.replace("TABLE_REGRESSION", regressions.length > 2 ? regressions.join("\n") : "No Change").replace("TABLE_IMPROVEMENTS", improvements.length > 2 ? improvements.join("\n") : "No Change");
-            github.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: prComment
+            const regressions = fs
+              .readFileSync('comment-temp/regressions.md', 'utf-8')
+              .split('\n')
+              .slice(0, TOP_COUNT + 2)
+              .filter((item) => item);
+            const improvements = fs
+              .readFileSync('comment-temp/improvements.md', 'utf-8')
+              .split('\n')
+              .slice(0, TOP_COUNT + 2)
+              .filter((item) => item);
+            let template =
+              '### Bencmark results 🚀 \n\n### Regressions\nTABLE_REGRESSION\n\n\n### Improvements\nTABLE_IMPROVEMENTS\n\n- [Full Improvenents List (Employees Only)](https://github.com/activeloopai/hub-benchmark-results/blob/' +
+              commitRefEnv +
+              '/improvements.csv)\n- [Full Regressions List (Employees Only)](https://github.com/activeloopai/hub-benchmark-results/blob/' +
+              commitRefEnv +
+              '/regressions.csv)\n';
+            const prComment = template
+              .replace(
+                'TABLE_REGRESSION',
+                regressions.length > 2 ? regressions.join('\n') : 'No Change'
+              )
+              .replace(
+                'TABLE_IMPROVEMENTS',
+                improvements.length > 2 ? improvements.join('\n') : 'No Change'
+              );
+            const {data: comments} = await github.issues.listComments({
+              owner: 'activeloopai',
+              repo: 'cicd-testrepo',
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            const commentFromBot = comments.find(
+              (item) => item.user.login === 'activeloop-bot'
+            );
+
+            await github.issues.updateComment({
+              issue_number: context.issue.number,
+              owner: 'activeloopai',
+              repo: 'cicd-testrepo',
+              comment_id: commentFromBot.id,
+              body: prComment,
             });
