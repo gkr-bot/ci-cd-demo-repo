@@ -15,7 +15,7 @@ env:
 jobs:
   benchmark:
     runs-on: [looprunner]
-    if: ${{ contains(github.event.pull_request.labels.*.name, env.APPROVE_LABEL) && github.repository == 'activeloopai/ci-cd-demo-repo' }}
+    if: contains(github.event.pull_request.labels.*.name, env.APPROVE_LABEL) && github.repository == 'activeloopai/ci-cd-demo-repo'
     steps:
       - name: Creates initial issue comment
         uses: actions/github-script@v3
