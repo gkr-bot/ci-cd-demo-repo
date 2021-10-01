@@ -11,11 +11,10 @@ env:
   BASELINE_REF: pr-${{ github.event.number }}-baseline-${{ github.event.pull_request.base.ref }}
   COMMIT_REF: pr-${{ github.event.number }}-commit-${{ github.event.pull_request.head.sha }}
   MAIN_REPO_NAME: ci-cd-demo-repo
-  APPROVE_LABEL: benchmark-approved
 jobs:
   benchmark:
     runs-on: [looprunner]
-    if: contains(github.event.pull_request.labels.*.name, env.APPROVE_LABEL) && github.repository == 'activeloopai/ci-cd-demo-repo'
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'benchmark-approved') && github.repository == 'activeloopai/ci-cd-demo-repo' }}
     steps:
       - name: Creates initial issue comment
         uses: actions/github-script@v3
@@ -59,6 +58,18 @@ jobs:
                 body: prComment,
               });
             }
+      - name: Remove the approval label
+        if: always()
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.ACTIVELOOP_BOT_PAT }}
+          script: |
+            await github.issues.removeLabel({
+              issue_number: context.issue.number,
+              owner: 'activeloopai',
+              repo: '${{ env.MAIN_REPO_NAME }}',
+              name: 'benchmark-approved'
+            });
       - name: Cancel previous runs if available
         uses: styfle/cancel-workflow-action@0.9.1
         with:
@@ -180,16 +191,4 @@ jobs:
               repo: '${{ env.MAIN_REPO_NAME }}',
               comment_id: commentFromBot.id,
               body: prComment,
-            });
-      - name: Remove the approval label
-        if: always()
-        uses: actions/github-script@v3
-        with:
-          github-token: ${{ secrets.ACTIVELOOP_BOT_PAT }}
-          script: |
-            await github.issues.removeLabel({
-              issue_number: context.issue.number,
-              owner: 'activeloopai',
-              repo: '${{ env.MAIN_REPO_NAME }}',
-              name: '${{ env.APPROVE_LABEL }}'
             });
