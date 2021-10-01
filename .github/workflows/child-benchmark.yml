@@ -43,7 +43,7 @@ jobs:
               await github.issues.updateComment({
                 issue_number: context.issue.number,
                 owner: 'activeloopai',
-                repo: '${{ env..MAIN_REPO_NAME }}',
+                repo: '${{ env.MAIN_REPO_NAME }}',
                 comment_id: commentId,
                 body: prComment,
               });
